@@ -1,0 +1,9 @@
+name: robot-control
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - opencv-python>=4.8.0
+      - Pillow>=10.0.0

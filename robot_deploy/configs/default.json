@@ -3,9 +3,9 @@
     "robot_model": "zsl-1",
     "sdk_root": "third_party/zsibot_sdk",
     "endpoint": {
-      "local_ip": "127.0.0.1",
+      "local_ip": "192.168.234.10",
       "local_port": 43988,
-      "dog_ip": "127.0.0.1"
+      "dog_ip": "192.168.234.1"
     }
   },
   "model": {
@@ -36,6 +36,12 @@
       "auto_lie_down_on_shutdown": true,
       "emergency_stop_on_error": true
     }
+  },
+  "camera": {
+    "rtsp_url": "rtsp://192.168.234.1:8554/test",
+    "width": 1280,
+    "height": 720,
+    "warmup_timeout_sec": 4.0
   },
   "request": {
     "instruction": "Walk forward and stop at the doorway.",
