@@ -30,8 +30,13 @@ class ZSLHighLevelRobot(RobotAdapter):
     def check_connection(self) -> bool:
         if not self._connected:
             return False
-        
-        return self._robot.checkConnect()
+
+        # SDK docs and binary builds have both names in different versions.
+        if hasattr(self._robot, "checkConnect"):
+            return bool(self._robot.checkConnect())
+        if hasattr(self._robot, "checkConnection"):
+            return bool(self._robot.checkConnection())
+        return False
 
     def stand_up(self) -> None:
         self._robot.standUp()
