@@ -148,7 +148,7 @@ OpenAI-compatible 推理客户端。
 基础动作测试（连接、站立、前进、转向、停止）。
 
 ### `scripts/start_model_service.py`
-按 `robot_deploy/configs/model_service.json` 启动 vLLM。
+按 `configs/model_service.json` 启动 vLLM。
 
 ### `scripts/test_model_service_infer.py`
 本地图片 + 指令 的单次推理测试，输出：
@@ -157,8 +157,8 @@ OpenAI-compatible 推理客户端。
 
 ## 7. 配置文件
 
-### `robot_deploy/configs/default.json`
+### `configs/default.json`
 机器人、相机、runtime 安全参数、单步请求。
 
-### `robot_deploy/configs/model_service.json`
+### `configs/model_service.json`
 vLLM 服务参数（模型路径、端口、多模态限制、长度限制等）。

@@ -24,7 +24,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Simple motion test for ZSI robot high-level SDK")
     parser.add_argument(
         "--config",
-        default="robot_deploy/configs/default.json",
+        default="configs/default.json",
         help="Path to runtime config json",
     )
     parser.add_argument("--forward-vx", type=float, default=0.15, help="Forward speed in m/s")

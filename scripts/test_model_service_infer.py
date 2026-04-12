@@ -35,12 +35,12 @@ def main() -> int:
     parser.add_argument("--instruction", required=True, help="Navigation instruction text")
     parser.add_argument(
         "--service-config",
-        default="robot_deploy/configs/model_service.json",
+        default="configs/model_service.json",
         help="Path to model service config",
     )
     parser.add_argument(
         "--runtime-config",
-        default="robot_deploy/configs/default.json",
+        default="configs/default.json",
         help="Path to runtime config",
     )
     parser.add_argument("--model-name", default=None, help="Optional model name override")

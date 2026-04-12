@@ -106,7 +106,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Start local vLLM model service from config")
     parser.add_argument(
         "--config",
-        default=str(Path("robot_deploy") / "configs" / "model_service.json"),
+        default=str(Path("configs") / "model_service.json"),
         help="Path to model service config json",
     )
     parser.add_argument("--dry-run", action="store_true", help="Only print command")

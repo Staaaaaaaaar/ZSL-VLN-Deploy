@@ -22,7 +22,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Open camera stream and visualize frames")
     args = parser.parse_args()
 
-    cfg = load_config("robot_deploy/configs/default.json")
+    cfg = load_config("configs/default.json")
     camera_cfg = cfg.get("camera", {})
     rtsp_url = camera_cfg.get("rtsp_url")
     if not rtsp_url:

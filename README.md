@@ -30,11 +30,11 @@ sudo apt install -y gstreamer1.0-tools \
 
 ## 本地模型推理服务
 
-已提供基于 vLLM 的本地模型服务脚本，默认配置在 `robot_deploy/configs/model_service.json`。
+已提供基于 vLLM 的本地模型服务脚本，默认配置在 `configs/model_service.json`。
 
 ### 1. 配置模型路径
 
-编辑 `robot_deploy/configs/model_service.json` 中的 `model_path`，可使用本地目录或 HuggingFace 仓库名。
+编辑 `configs/model_service.json` 中的 `model_path`，可使用本地目录或 HuggingFace 仓库名。
 本仓库默认本地路径为 `models/Qwen2.5-VL-3B_rl_rxr_4000_step350`。
 
 ### 2. 启动服务
@@ -59,7 +59,7 @@ python scripts/test_model_service_infer.py --image <local_image_path> --instruct
 
 ### 4. 连接到机器人运行脚本
 
-默认模型端点是 `http://127.0.0.1:8003/v1`，与你当前 `robot_deploy/configs/default.json` 保持一致。
+默认模型端点是 `http://127.0.0.1:8003/v1`，与你当前 `configs/default.json` 保持一致。
 服务就绪后可直接运行：
 
 ```powershell

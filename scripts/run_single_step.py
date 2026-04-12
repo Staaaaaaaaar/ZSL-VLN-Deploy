@@ -68,7 +68,7 @@ def capture_rtsp_image(camera_cfg: dict | None):
 
 
 def main() -> None:
-    cfg = load_config(os.path.join("robot_deploy", "configs", "default.json"))
+    cfg = load_config(os.path.join("configs", "default.json"))
 
     robot_cfg = cfg["robot"]
     endpoint_cfg = robot_cfg["endpoint"]
