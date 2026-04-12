@@ -61,9 +61,16 @@ class RobotState:
 
 @dataclass
 class RuntimeSafetyLimits:
-    max_vx: float = 0.3
-    max_vy: float = 0.2
-    max_yaw_rate: float = 0.6
+    # SDK valid ranges:
+    # vx: (-3 ~ -0.05) U (0.05 ~ 3)
+    # vy: (-1 ~ -0.1)  U (0.1 ~ 1)
+    # yaw: (-3 ~ -0.02) U (0.02 ~ 3)
+    max_vx: float = 3.0
+    max_vy: float = 1.0
+    max_yaw_rate: float = 3.0
+    min_nonzero_vx: float = 0.05
+    min_nonzero_vy: float = 0.1
+    min_nonzero_yaw_rate: float = 0.02
     max_command_duration_sec: float = 2.0
     max_actions_per_cycle: int = 3
 

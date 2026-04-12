@@ -29,7 +29,12 @@ class ActiveVLNActionInterface(ActionInterface):
         if not response_text:
             return [NavigationAction(kind=ActionKind.STOP, raw_text="")]
 
-        cleaned = response_text.lower().replace("\n", " ").strip()
+        cleaned = response_text.lower().strip()
+        cleaned = cleaned.replace("\n", ",")
+        cleaned = cleaned.replace("，", ",")
+        cleaned = cleaned.replace("；", ",")
+        cleaned = cleaned.replace(";", ",")
+
         parts = [p.strip() for p in cleaned.split(",") if p.strip()]
         if not parts:
             return [NavigationAction(kind=ActionKind.STOP, raw_text=cleaned)]
