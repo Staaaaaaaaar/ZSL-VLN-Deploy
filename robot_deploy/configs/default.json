@@ -1,0 +1,44 @@
+{
+  "robot": {
+    "robot_model": "zsl-1",
+    "sdk_root": "third_party/zsibot_sdk",
+    "endpoint": {
+      "local_ip": "127.0.0.1",
+      "local_port": 43988,
+      "dog_ip": "127.0.0.1"
+    }
+  },
+  "model": {
+    "base_url": "http://127.0.0.1:8003/v1",
+    "api_key": "EMPTY",
+    "model_name": null,
+    "action_space": "r2r",
+    "timeout_sec": 30.0,
+    "max_tokens": 256,
+    "temperature": 0.2,
+    "top_p": 0.8
+  },
+  "interface": {
+    "action_space": "r2r",
+    "forward_vx": 0.2,
+    "yaw_rate": 0.5
+  },
+  "runtime": {
+    "safety": {
+      "max_vx": 0.25,
+      "max_vy": 0.1,
+      "max_yaw_rate": 0.5,
+      "max_command_duration_sec": 2.0,
+      "max_actions_per_cycle": 3
+    },
+    "policy": {
+      "auto_stand_up": true,
+      "auto_lie_down_on_shutdown": true,
+      "emergency_stop_on_error": true
+    }
+  },
+  "request": {
+    "instruction": "Walk forward and stop at the doorway.",
+    "image": null
+  }
+}
