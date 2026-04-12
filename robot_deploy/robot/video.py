@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import threading
 import time
 from dataclasses import dataclass
@@ -12,8 +13,8 @@ class FramePacket:
     timestamp: float
 
 
-class GStreamerCameraStream:
-    """RTSP camera reader using GStreamer and keeping the latest frame."""
+class FFmpegCameraStream:
+    """RTSP camera reader based on OpenCV FFmpeg backend."""
 
     def __init__(
         self,
@@ -21,11 +22,15 @@ class GStreamerCameraStream:
         width: int = 1280,
         height: int = 720,
         reconnect_interval_sec: float = 0.8,
+        rtsp_transport: str = "tcp",
+        low_latency: bool = True,
     ):
         self.rtsp_url = rtsp_url
         self.width = width
         self.height = height
         self.reconnect_interval_sec = reconnect_interval_sec
+        self.rtsp_transport = rtsp_transport
+        self.low_latency = low_latency
 
         self._cv2 = None
         self._capture = None
@@ -36,13 +41,14 @@ class GStreamerCameraStream:
         self._latest: FramePacket | None = None
         self._frames_ok = 0
         self._frames_fail = 0
+        self._backend = "uninitialized"
 
     def start(self) -> None:
         if self._running:
             return
         self._cv2 = self._import_cv2()
         self._running = True
-        self._thread = threading.Thread(target=self._reader_loop, name="gstreamer-camera", daemon=True)
+        self._thread = threading.Thread(target=self._reader_loop, name="ffmpeg-camera", daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
@@ -70,6 +76,7 @@ class GStreamerCameraStream:
                 "frames_ok": self._frames_ok,
                 "frames_fail": self._frames_fail,
                 "latest_age_sec": age,
+                "backend": self._backend,
             }
 
     def _reader_loop(self) -> None:
@@ -94,28 +101,41 @@ class GStreamerCameraStream:
 
     def _open_capture(self):
         cv2 = self._cv2
-        pipeline = self._build_pipeline()
-        cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+        if self.low_latency:
+            ffmpeg_opts = (
+                f"rtsp_transport;{self.rtsp_transport}|"
+                "fflags;nobuffer|flags;low_delay|max_delay;500000|stimeout;5000000"
+            )
+            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = ffmpeg_opts
+
+        cap = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
         if cap is not None and cap.isOpened():
+            self._backend = "ffmpeg"
+            try:
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            except Exception:
+                pass
+            return cap
+
+        if cap is not None:
+            try:
+                cap.release()
+            except Exception:
+                pass
+
+        # Secondary fallback for non-FFmpeg builds.
+        cap = cv2.VideoCapture(self.rtsp_url, cv2.CAP_ANY)
+        if cap is not None and cap.isOpened():
+            self._backend = "opencv-any"
             return cap
         if cap is not None:
             try:
                 cap.release()
             except Exception:
                 pass
+
+        self._backend = "open_failed"
         return None
-
-    def _build_pipeline(self) -> str:
-        scale = ""
-        if self.width > 0 and self.height > 0:
-            scale = f" ! videoscale ! video/x-raw,width={self.width},height={self.height}"
-
-        return (
-            f"rtspsrc location={self.rtsp_url} latency=0 ! "
-            "rtph264depay ! h264parse ! avdec_h264 ! videoconvert"
-            f"{scale} ! video/x-raw,format=BGR ! "
-            "appsink sync=false drop=true max-buffers=1"
-        )
 
     def _release_capture(self) -> None:
         cap = self._capture

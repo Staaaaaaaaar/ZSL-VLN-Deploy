@@ -16,16 +16,11 @@ conda env create -f envs/model-service.yml
 conda activate model-service
 ```
 
-### 3. Ubuntu 22.04 GStreamer 依赖
+### 3. Ubuntu 22.04 FFmpeg 依赖
 
 ```powershell
 sudo apt update
-sudo apt install -y gstreamer1.0-tools \
-                    gstreamer1.0-plugins-base \
-                    gstreamer1.0-plugins-good \
-                    gstreamer1.0-plugins-bad \
-                    gstreamer1.0-plugins-ugly \
-                    gstreamer1.0-libav
+sudo apt install -y ffmpeg
 ```
 
 ## 本地模型推理服务

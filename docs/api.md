@@ -62,8 +62,8 @@
 - `send_motion(cmd)`: 下发速度并按 `duration_sec` 自动停止
 - `read_state()`: 读取电量、姿态、机体速度
 
-### `GStreamerCameraStream`
-仅使用 GStreamer 的 RTSP 相机流读取器（与运控解耦）。
+### `FFmpegCameraStream`
+基于 OpenCV FFmpeg 后端的 RTSP 相机流读取器（与运控解耦）。
 
 关键方法：
 - `start() / stop()`
@@ -73,7 +73,7 @@
 设计要点：
 - 后台线程持续拉流
 - 主流程只取“最新帧”避免缓冲积压
-- 管线包含低延迟参数：`latency=0` + `appsink drop=true max-buffers=1`
+- 通过 `OPENCV_FFMPEG_CAPTURE_OPTIONS` 注入低延迟选项（`fflags=nobuffer`、`flags=low_delay` 等）
 
 ## 3. Model 侧
 
