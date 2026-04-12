@@ -31,7 +31,7 @@ class ZSLHighLevelRobot(RobotAdapter):
         if not self._connected:
             return False
         
-        return self._robot.checkConnection()
+        return self._robot.checkConnect()
 
     def stand_up(self) -> None:
         self._robot.standUp()
@@ -58,7 +58,7 @@ class ZSLHighLevelRobot(RobotAdapter):
 
     def close(self) -> None:
         try:
-            self.stop()
+            self.lie_down()
         except Exception:
             pass
         self._connected = False
