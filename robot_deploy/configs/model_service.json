@@ -1,11 +1,14 @@
 {
-  "model_path": "Arvil/Qwen2.5-VL-3B_rl_rxr_4000_step350",
+  "model_path": "models/Qwen2.5-VL-3B_rl_rxr_4000_step350",
   "host": "127.0.0.1",
   "port": 8003,
   "api_prefix": "/v1",
   "task": "generate",
   "trust_remote_code": true,
-  "limit_mm_per_prompt": "image=200,video=0",
+  "limit_mm_per_prompt": {
+    "image": 200,
+    "video": 0
+  },
   "mm_processor_kwargs": {
     "max_pixels": 80000
   },

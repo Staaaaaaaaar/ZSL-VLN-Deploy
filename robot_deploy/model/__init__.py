@@ -1,3 +1,3 @@
-from .activevln_client import ActiveVLNOpenAIModel
+from .activevln import ActiveVLNOpenAIModel
 
 __all__ = ["ActiveVLNOpenAIModel"]

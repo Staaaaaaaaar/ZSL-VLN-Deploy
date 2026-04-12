@@ -2,11 +2,19 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+import time
+
+# Ensure repo root is importable when executing: python scripts/xxx.py
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
 
 from robot_deploy.core import NavigationRequest, RobotEndpoint, RuntimeSafetyLimits
 from robot_deploy.interface import ActiveVLNActionInterface
 from robot_deploy.model import ActiveVLNOpenAIModel
 from robot_deploy.robot import ZSLHighLevelRobot
+from robot_deploy.robot.video import GStreamerCameraStream
 from robot_deploy.runtime import RuntimeController, RuntimePolicy
 
 
@@ -15,22 +23,48 @@ def load_config(path: str) -> dict:
         return json.load(f)
 
 
-def maybe_load_image(image_value):
-    if image_value is None:
-        return None
+def capture_rtsp_image(camera_cfg: dict | None):
+    if not camera_cfg:
+        raise RuntimeError("camera config is required")
 
-    if not isinstance(image_value, str):
-        return None
+    rtsp_url = str(camera_cfg.get("rtsp_url", "")).strip()
+    if not rtsp_url:
+        raise RuntimeError("camera.rtsp_url is empty")
 
-    if not os.path.isfile(image_value):
-        return None
+    width = int(camera_cfg.get("width", 1280))
+    height = int(camera_cfg.get("height", 720))
+    timeout_sec = float(camera_cfg.get("warmup_timeout_sec", 4.0))
+
+    stream = GStreamerCameraStream(
+        rtsp_url=rtsp_url,
+        width=width,
+        height=height,
+    )
+    stream.start()
 
     try:
-        from PIL import Image
+        deadline = time.time() + max(timeout_sec, 0.2)
+        while time.time() < deadline:
+            pkt = stream.read_latest(timeout_sec=0.5)
+            if pkt is None:
+                continue
 
-        return Image.open(image_value).convert("RGB")
-    except Exception:
-        return None
+            frame = pkt.frame
+            try:
+                # Convert OpenCV BGR frame to RGB for PIL/OpenAI image payload.
+                rgb = frame[:, :, ::-1].copy()
+            except Exception:
+                return frame
+
+            try:
+                from PIL import Image
+
+                return Image.fromarray(rgb)
+            except Exception:
+                return rgb
+        raise RuntimeError(f"camera frame warmup timeout after {timeout_sec:.2f}s")
+    finally:
+        stream.stop()
 
 
 def main() -> None:
@@ -67,9 +101,12 @@ def main() -> None:
     )
 
     req_cfg = cfg["request"]
+    camera_cfg = cfg.get("camera")
+    request_image = capture_rtsp_image(camera_cfg)
+
     nav_request = NavigationRequest(
         instruction=req_cfg["instruction"],
-        image=maybe_load_image(req_cfg.get("image")),
+        image=request_image,
     )
 
     controller.startup(endpoint)
