@@ -75,6 +75,19 @@
 - 主流程只取“最新帧”避免缓冲积压
 - 通过 `OPENCV_FFMPEG_CAPTURE_OPTIONS` 注入低延迟选项（`fflags=nobuffer`、`flags=low_delay` 等）
 
+### `GStreamerCameraStream`
+基于 OpenCV GStreamer 后端的 RTSP 相机流读取器（与运控解耦）。
+
+关键方法：
+- `start() / stop()`
+- `read_latest(timeout_sec=...) -> FramePacket | None`
+- `stats() -> dict`
+
+设计要点：
+- 管线参考 zsibot SDK 文档：`rtspsrc -> rtph264depay -> h264parse -> avdec_h264 -> videoconvert -> appsink`
+- 默认 `latency=0`、`appsink drop=true max-buffers=1`，优先最新帧
+- 支持 `rtsp_transport=tcp|udp`
+
 ## 3. Model 侧
 
 ### 模块

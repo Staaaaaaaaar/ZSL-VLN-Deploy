@@ -16,12 +16,38 @@ conda env create -f envs/model-service.yml
 conda activate model-service
 ```
 
-### 3. Ubuntu 22.04 FFmpeg 依赖
+### 3. Ubuntu 22.04 相机流依赖（FFmpeg + GStreamer）
 
 ```powershell
 sudo apt update
-sudo apt install -y ffmpeg
+sudo apt install -y ffmpeg \
+										gstreamer1.0-tools \
+										gstreamer1.0-plugins-base \
+										gstreamer1.0-plugins-good \
+										gstreamer1.0-plugins-bad \
+										gstreamer1.0-plugins-ugly \
+										gstreamer1.0-libav
 ```
+
+### 4. OpenCV 环境说明（关键）
+
+若希望在 Python 中使用 `cv2.CAP_GSTREAMER`，通常不要直接使用 `pip install opencv-python`。
+多数 pip 预编译 wheel 不带 GStreamer 支持，会在 `cv2.getBuildInformation()` 中显示 `GStreamer: NO`。
+
+建议在机器人控制环境中使用 conda-forge OpenCV：
+
+```powershell
+conda install -n robot-control -c conda-forge -y \
+	opencv gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
+```
+
+验证：
+
+```powershell
+conda run -n robot-control python -c "import cv2; s=cv2.getBuildInformation(); print('\n'.join([l for l in s.splitlines() if 'Video I/O' in l or 'GStreamer' in l or 'FFMPEG' in l]))"
+```
+
+目标是看到：`FFMPEG: YES` 且 `GStreamer: YES`。
 
 ## 本地模型推理服务
 

@@ -41,10 +41,16 @@
     }
   },
   "camera": {
+    "backend": "ffmpeg",
     "rtsp_url": "rtsp://192.168.234.1:8554/test",
+    "rtsp_transport": "tcp",
     "width": 1280,
     "height": 720,
-    "warmup_timeout_sec": 4.0
+    "warmup_timeout_sec": 4.0,
+    "ffmpeg_low_latency": true,
+    "gst_latency": 0,
+    "gst_drop": true,
+    "gst_max_buffers": 1
   },
   "request": {
     "instruction": "Walk forward and stop at the doorway.",

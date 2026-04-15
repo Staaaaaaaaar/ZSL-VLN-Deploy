@@ -4,6 +4,12 @@ channels:
 dependencies:
   - python=3.10
   - pip
+  - opencv
+  - gstreamer
+  - gst-plugins-base
+  - gst-plugins-good
+  - gst-plugins-bad
+  - gst-plugins-ugly
+  - gst-libav
   - pip:
-      - opencv-python>=4.8.0
       - Pillow>=10.0.0

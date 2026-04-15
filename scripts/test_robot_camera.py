@@ -11,7 +11,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-from robot_deploy.robot import FFmpegCameraStream
+from robot_deploy.robot import FFmpegCameraStream, GStreamerCameraStream
 
 
 def load_config(path: str) -> dict:
@@ -33,10 +33,16 @@ def main() -> int:
         help="Seconds to wait for the first frame before failing fast",
     )
     parser.add_argument(
+        "--backend",
+        choices=["ffmpeg", "gstreamer"],
+        default=None,
+        help="Camera backend override",
+    )
+    parser.add_argument(
         "--rtsp-transport",
         choices=["tcp", "udp"],
         default="tcp",
-        help="FFmpeg RTSP transport mode",
+        help="RTSP transport mode",
     )
     args = parser.parse_args()
 
@@ -52,21 +58,34 @@ def main() -> int:
     warmup_timeout = args.warmup_timeout
     if warmup_timeout is None:
         warmup_timeout = float(camera_cfg.get("warmup_timeout_sec", 4.0))
+    backend = (args.backend or camera_cfg.get("backend", "ffmpeg")).strip().lower()
 
-    stream = FFmpegCameraStream(
-        rtsp_url=rtsp_url,
-        width=width,
-        height=height,
-        rtsp_transport=args.rtsp_transport,
-        low_latency=True,
-    )
+    if backend == "gstreamer":
+        stream = GStreamerCameraStream(
+            rtsp_url=rtsp_url,
+            width=width,
+            height=height,
+            rtsp_transport=args.rtsp_transport,
+            latency=int(camera_cfg.get("gst_latency", 0)),
+            drop=bool(camera_cfg.get("gst_drop", True)),
+            max_buffers=int(camera_cfg.get("gst_max_buffers", 1)),
+        )
+    else:
+        stream = FFmpegCameraStream(
+            rtsp_url=rtsp_url,
+            width=width,
+            height=height,
+            rtsp_transport=args.rtsp_transport,
+            low_latency=bool(camera_cfg.get("ffmpeg_low_latency", True)),
+        )
 
     try:
         import cv2
 
         print(f"[INFO] camera rtsp: {rtsp_url}")
+        print(f"[INFO] backend: {backend}")
         print(f"[INFO] first-frame timeout: {warmup_timeout:.1f}s")
-        print(f"[INFO] ffmpeg transport: {args.rtsp_transport}")
+        print(f"[INFO] rtsp transport: {args.rtsp_transport}")
         stream.start()
         waiting_since = None
         while True:
@@ -85,10 +104,15 @@ def main() -> int:
                     )
                     print(f"[HINT] stream stats: {stats}")
                     if stats.get("backend") == "open_failed":
-                        print(
-                            "[HINT] both ffmpeg and generic OpenCV open failed. "
-                            "Check URL/path/permissions on robot stream service."
-                        )
+                        if backend == "gstreamer":
+                            print(
+                                "[HINT] gstreamer open failed. Check OpenCV build info for GStreamer: YES."
+                            )
+                        else:
+                            print(
+                                "[HINT] both ffmpeg and generic OpenCV open failed. "
+                                "Check URL/path/permissions on robot stream service."
+                            )
                     return 3
                 continue
 

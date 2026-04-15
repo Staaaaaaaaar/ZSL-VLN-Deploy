@@ -14,7 +14,7 @@ from robot_deploy.core import NavigationRequest, RobotEndpoint, RuntimeSafetyLim
 from robot_deploy.interface import ActiveVLNActionInterface
 from robot_deploy.model import ActiveVLNOpenAIModel
 from robot_deploy.robot import ZSLHighLevelRobot
-from robot_deploy.robot.video import FFmpegCameraStream
+from robot_deploy.robot.video import FFmpegCameraStream, GStreamerCameraStream
 from robot_deploy.runtime import RuntimeController, RuntimePolicy
 
 
@@ -34,12 +34,27 @@ def capture_rtsp_image(camera_cfg: dict | None):
     width = int(camera_cfg.get("width", 1280))
     height = int(camera_cfg.get("height", 720))
     timeout_sec = float(camera_cfg.get("warmup_timeout_sec", 4.0))
+    backend = str(camera_cfg.get("backend", "ffmpeg")).strip().lower()
+    rtsp_transport = str(camera_cfg.get("rtsp_transport", "tcp")).strip().lower()
 
-    stream = FFmpegCameraStream(
-        rtsp_url=rtsp_url,
-        width=width,
-        height=height,
-    )
+    if backend == "gstreamer":
+        stream = GStreamerCameraStream(
+            rtsp_url=rtsp_url,
+            width=width,
+            height=height,
+            rtsp_transport=rtsp_transport,
+            latency=int(camera_cfg.get("gst_latency", 0)),
+            drop=bool(camera_cfg.get("gst_drop", True)),
+            max_buffers=int(camera_cfg.get("gst_max_buffers", 1)),
+        )
+    else:
+        stream = FFmpegCameraStream(
+            rtsp_url=rtsp_url,
+            width=width,
+            height=height,
+            rtsp_transport=rtsp_transport,
+            low_latency=bool(camera_cfg.get("ffmpeg_low_latency", True)),
+        )
     stream.start()
 
     try:
