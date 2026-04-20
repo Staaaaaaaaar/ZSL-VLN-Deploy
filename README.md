@@ -85,6 +85,14 @@ python scripts/test_model_service_infer.py --image <local_image_path> --instruct
 
 ```powershell
 python scripts/run_single_step.py
+
+连续闭环 VLN（持续取图 + 多轮推理 + 动作队列执行）可运行：
+
+```powershell
+python scripts/run_continuous_vln.py
+```
+
+相关预算参数在 `configs/default.json` 的 `runtime_episode` 字段中配置。
 ```
 
 ## 机器人侧基础测试脚本

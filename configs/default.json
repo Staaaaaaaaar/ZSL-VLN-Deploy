@@ -55,5 +55,12 @@
   "request": {
     "instruction": "Walk forward and stop at the doorway.",
     "image": null
+  },
+  "runtime_episode": {
+    "max_turn_budget": 40,
+    "max_step_budget": 120,
+    "max_actions_per_turn": 3,
+    "early_stop_rotation": 12,
+    "stop_on_disconnect": true
   }
 }

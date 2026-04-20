@@ -81,3 +81,28 @@ class RuntimeStepResult:
     model_text: str = ""
     executed_commands: list[MotionCommand] = field(default_factory=list)
     error: str | None = None
+
+
+@dataclass
+class RuntimeEpisodeConfig:
+    # Max number of model inference turns.
+    max_turn_budget: int = 40
+    # Max number of executed primitive actions.
+    max_step_budget: int = 120
+    # Max number of parsed actions accepted from one model response.
+    max_actions_per_turn: int = 3
+    # Early stop if the agent keeps rotating without moving forward.
+    early_stop_rotation: int = 12
+    # Whether to fail fast on robot disconnects during runtime.
+    stop_on_disconnect: bool = True
+
+
+@dataclass
+class RuntimeEpisodeResult:
+    ok: bool
+    stop_reason: str
+    turns: int
+    steps: int
+    model_outputs: list[str] = field(default_factory=list)
+    executed_commands: list[MotionCommand] = field(default_factory=list)
+    error: str | None = None

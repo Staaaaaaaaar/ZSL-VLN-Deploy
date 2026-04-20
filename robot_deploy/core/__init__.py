@@ -7,6 +7,8 @@ from .types import (
     NavigationRequest,
     RobotEndpoint,
     RobotState,
+    RuntimeEpisodeConfig,
+    RuntimeEpisodeResult,
     RuntimeSafetyLimits,
     RuntimeStepResult,
 )
@@ -22,6 +24,8 @@ __all__ = [
     "NavigationRequest",
     "RobotEndpoint",
     "RobotState",
+    "RuntimeEpisodeConfig",
+    "RuntimeEpisodeResult",
     "RuntimeSafetyLimits",
     "RuntimeStepResult",
 ]
