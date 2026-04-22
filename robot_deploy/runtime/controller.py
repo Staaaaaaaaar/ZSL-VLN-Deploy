@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import time
 from typing import Callable
 
 from robot_deploy.core import (
@@ -25,6 +26,8 @@ class RuntimePolicy:
     auto_stand_up: bool = True
     auto_lie_down_on_shutdown: bool = True
     emergency_stop_on_error: bool = True
+    stand_up_settle_sec: float = 3.0
+    inter_command_gap_sec: float = 0.1
 
 
 class RuntimeController:
@@ -46,10 +49,12 @@ class RuntimeController:
 
     def startup(self, endpoint: RobotEndpoint) -> None:
         self.robot.connect(endpoint)
-        # if not self.robot.check_connection():
-        #     raise RuntimeError("Robot connection check failed after initRobot")
+        if not self.robot.check_connection():
+            raise RuntimeError("Robot connection check failed after initRobot")
         if self.policy.auto_stand_up:
             self.robot.stand_up()
+            if self.policy.stand_up_settle_sec > 0:
+                time.sleep(self.policy.stand_up_settle_sec)
 
     def run_once(self, request_data: NavigationRequest) -> RuntimeStepResult:
         # if not self.robot.check_connection():
@@ -65,7 +70,7 @@ class RuntimeController:
 
             executed: list[MotionCommand] = []
             for cmd in safe_commands:
-                self.robot.send_motion(cmd)
+                self._execute_motion_with_gap(cmd)
                 executed.append(cmd)
                 if cmd.vx == 0.0 and cmd.vy == 0.0 and cmd.yaw_rate == 0.0:
                     break
@@ -148,7 +153,7 @@ class RuntimeController:
 
                 safe_commands = self._actions_to_safe_commands([action])
                 for cmd in safe_commands:
-                    self.robot.send_motion(cmd)
+                    self._execute_motion_with_gap(cmd)
                     executed_commands.append(cmd)
 
                 steps += 1
@@ -192,7 +197,10 @@ class RuntimeController:
 
     def shutdown(self) -> None:
         try:
-            self.robot.stop()
+            try:
+                self.robot.stop()
+            except Exception:
+                pass
             if self.policy.auto_lie_down_on_shutdown:
                 self.robot.lie_down()
         finally:
@@ -200,6 +208,11 @@ class RuntimeController:
                 self.model.close()
             finally:
                 self.robot.close()
+
+    def _execute_motion_with_gap(self, cmd: MotionCommand) -> None:
+        self.robot.send_motion(cmd)
+        if self.policy.inter_command_gap_sec > 0:
+            time.sleep(self.policy.inter_command_gap_sec)
 
     def _actions_to_safe_commands(self, actions: list[NavigationAction]) -> list[MotionCommand]:
         raw_commands = self.action_interface.to_motion_commands(actions)
