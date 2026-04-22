@@ -78,8 +78,9 @@ class RuntimeSafetyLimits:
 @dataclass
 class RuntimeStepResult:
     ok: bool
+    instruction: str = ""
+    img: Any | None = None
     model_text: str = ""
-    executed_commands: list[MotionCommand] = field(default_factory=list)
     error: str | None = None
 
 
@@ -103,6 +104,7 @@ class RuntimeEpisodeResult:
     stop_reason: str
     turns: int
     steps: int
+    step_results: list[RuntimeStepResult] = field(default_factory=list)
     model_outputs: list[str] = field(default_factory=list)
     executed_commands: list[MotionCommand] = field(default_factory=list)
     error: str | None = None

@@ -39,7 +39,9 @@
       "auto_lie_down_on_shutdown": true,
       "emergency_stop_on_error": true,
       "stand_up_settle_sec": 3.0,
-      "inter_command_gap_sec": 0.1
+      "inter_command_gap_sec": 0.1,
+      "save_inference_info": false,
+      "inference_save_dir": "runtime_logs/inference"
     }
   },
   "camera": {

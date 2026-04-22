@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import math
+import os
 import time
-from typing import Callable
+from typing import Any, Callable
 
 from robot_deploy.core import (
     ActionKind,
@@ -28,6 +30,8 @@ class RuntimePolicy:
     emergency_stop_on_error: bool = True
     stand_up_settle_sec: float = 3.0
     inter_command_gap_sec: float = 0.1
+    save_inference_info: bool = False
+    inference_save_dir: str = "runtime_logs/inference"
 
 
 class RuntimeController:
@@ -56,39 +60,10 @@ class RuntimeController:
             if self.policy.stand_up_settle_sec > 0:
                 time.sleep(self.policy.stand_up_settle_sec)
 
-    def run_once(self, request_data: NavigationRequest) -> RuntimeStepResult:
-        # if not self.robot.check_connection():
-        #     return RuntimeStepResult(ok=False, error="robot disconnected")
-
-        try:
-            model_rsp = self.model.infer(request_data)
-            actions = self.action_interface.parse_model_response(model_rsp.text)
-            actions = actions[: self.safety.max_actions_per_cycle]
-
-            raw_commands = self.action_interface.to_motion_commands(actions)
-            safe_commands = [self._apply_safety(cmd) for cmd in raw_commands]
-
-            executed: list[MotionCommand] = []
-            for cmd in safe_commands:
-                self._execute_motion_with_gap(cmd)
-                executed.append(cmd)
-                if cmd.vx == 0.0 and cmd.vy == 0.0 and cmd.yaw_rate == 0.0:
-                    break
-
-            return RuntimeStepResult(ok=True, model_text=model_rsp.text, executed_commands=executed)
-        except Exception as exc:
-            if self.policy.emergency_stop_on_error:
-                try:
-                    self.robot.stop()
-                except Exception:
-                    pass
-            return RuntimeStepResult(ok=False, error=str(exc))
-
     def run_episode(
         self,
         request_provider: Callable[[], NavigationRequest],
         episode_config: RuntimeEpisodeConfig | None = None,
-        goal_checker: Callable[[NavigationRequest], bool] | None = None,
     ) -> RuntimeEpisodeResult:
         """Run a continuous closed-loop VLN episode on real hardware.
 
@@ -98,8 +73,10 @@ class RuntimeController:
         cfg = episode_config or RuntimeEpisodeConfig()
 
         pending_actions: list[NavigationAction] = []
+        step_results: list[RuntimeStepResult] = []
         model_outputs: list[str] = []
         executed_commands: list[MotionCommand] = []
+        active_step_result: RuntimeStepResult | None = None
 
         turns = 0
         steps = 0
@@ -115,6 +92,7 @@ class RuntimeController:
                         stop_reason=stop_reason,
                         turns=turns,
                         steps=steps,
+                        step_results=step_results,
                         model_outputs=model_outputs,
                         executed_commands=executed_commands,
                         error="robot disconnected",
@@ -131,6 +109,16 @@ class RuntimeController:
 
                     request_data = request_provider()
                     model_rsp = self.model.infer(request_data)
+
+                    active_step_result = RuntimeStepResult(
+                        ok=True,
+                        instruction=request_data.instruction,
+                        img=request_data.image,
+                        model_text=model_rsp.text,
+                    )
+                    step_results.append(active_step_result)
+                    self._save_inference(turn_index=turns + 1, step_result=active_step_result)
+
                     model_outputs.append(model_rsp.text)
 
                     actions = self.action_interface.parse_model_response(model_rsp.text)
@@ -155,15 +143,13 @@ class RuntimeController:
                 for cmd in safe_commands:
                     self._execute_motion_with_gap(cmd)
                     executed_commands.append(cmd)
+                    if active_step_result is not None:
+                        active_step_result.executed_commands.append(cmd)
 
                 steps += 1
 
                 if action.kind == ActionKind.STOP:
-                    request_data = request_provider()
-                    if goal_checker is not None and goal_checker(request_data):
-                        stop_reason = "success"
-                    else:
-                        stop_reason = "stopped_goal_not_confirmed"
+                    stop_reason = "stopped_by_model"
                     break
 
             try:
@@ -172,14 +158,18 @@ class RuntimeController:
                 pass
 
             return RuntimeEpisodeResult(
-                ok=stop_reason == "success",
+                ok=True,
                 stop_reason=stop_reason,
                 turns=turns,
                 steps=steps,
+                step_results=step_results,
                 model_outputs=model_outputs,
                 executed_commands=executed_commands,
             )
         except Exception as exc:
+            if active_step_result is not None and active_step_result.error is None:
+                active_step_result.ok = False
+                active_step_result.error = str(exc)
             if self.policy.emergency_stop_on_error:
                 try:
                     self.robot.stop()
@@ -190,6 +180,7 @@ class RuntimeController:
                 stop_reason="runtime_error",
                 turns=turns,
                 steps=steps,
+                step_results=step_results,
                 model_outputs=model_outputs,
                 executed_commands=executed_commands,
                 error=str(exc),
@@ -213,6 +204,53 @@ class RuntimeController:
         self.robot.send_motion(cmd)
         if self.policy.inter_command_gap_sec > 0:
             time.sleep(self.policy.inter_command_gap_sec)
+
+    def _save_inference(self, turn_index: int, step_result: RuntimeStepResult) -> None:
+        if not self.policy.save_inference_info:
+            return
+
+        save_dir = self.policy.inference_save_dir.strip()
+        if not save_dir:
+            return
+
+        os.makedirs(save_dir, exist_ok=True)
+        ts_ms = int(time.time() * 1000)
+        record_id = f"turn_{turn_index:04d}_{ts_ms}"
+        image_path = self._save_inference_image(save_dir=save_dir, record_id=record_id, image=step_result.img)
+
+        payload = {
+            "turn": turn_index,
+            "timestamp_ms": ts_ms,
+            "instruction": step_result.instruction,
+            "model_text": step_result.model_text,
+            "ok": step_result.ok,
+            "error": step_result.error,
+            "image_path": image_path,
+        }
+        json_path = os.path.join(save_dir, f"{record_id}.json")
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+
+    def _save_inference_image(self, save_dir: str, record_id: str, image: Any | None) -> str | None:
+        if image is None:
+            return None
+
+        image_path = os.path.join(save_dir, f"{record_id}.png")
+        try:
+            if hasattr(image, "save"):
+                image.save(image_path)
+                return image_path
+
+            from PIL import Image
+
+            rgb = image
+            if hasattr(image, "ndim") and hasattr(image, "shape") and getattr(image, "ndim", 0) == 3:
+                if image.shape[2] >= 3:
+                    rgb = image[:, :, :3]
+            Image.fromarray(rgb).save(image_path)
+            return image_path
+        except Exception:
+            return None
 
     def _actions_to_safe_commands(self, actions: list[NavigationAction]) -> list[MotionCommand]:
         raw_commands = self.action_interface.to_motion_commands(actions)
