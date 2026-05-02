@@ -48,17 +48,23 @@ def main() -> int:
     )
 
     robot.connect(endpoint)
+
+    time.sleep(3.0)
+
     if robot.check_connection():
         print("[OK] robot connected")
     else:
         print("[ERR] robot not connected")
+
+    print("[STATE] initial robot state:")
+    print(robot.read_state())
 
     print("[STEP] stand up")
     robot.stand_up()
     time.sleep(5)
 
     sequence = [
-        ("forward", MotionCommand(vx=args.forward_vx, vy=0.0, yaw_rate=0.0, duration_sec=args.duration)),
+        # ("forward", MotionCommand(vx=args.forward_vx, vy=0.0, yaw_rate=0.0, duration_sec=args.duration)),
         ("left turn", MotionCommand(vx=0.0, vy=0.0, yaw_rate=args.yaw_rate, duration_sec=args.duration)),
         ("right turn", MotionCommand(vx=0.0, vy=0.0, yaw_rate=-args.yaw_rate, duration_sec=args.duration)),
     ]
@@ -66,15 +72,19 @@ def main() -> int:
     for name, cmd in sequence:
         print(f"[STEP] {name} -> {cmd}")
         robot.send_motion(cmd)
-        time.sleep(2)
+        time.sleep(0.6)
 
     robot.stop()
     print("[OK] stop sent")
-    time.sleep(2)
+    time.sleep(0.6)
 
     print("[STEP] lie down")
     robot.lie_down()
-    time.sleep(3)
+    time.sleep(2.0)
+
+    print("[STEP] passive mode")
+    robot.passive()
+    time.sleep(2.0)
 
     robot.close()
 
