@@ -30,19 +30,17 @@ class ZSLHighLevelRobot(RobotAdapter):
     def check_connection(self) -> bool:
         if not self._connected:
             return False
-
-        # SDK docs and binary builds have both names in different versions.
-        if hasattr(self._robot, "checkConnect"):
-            return bool(self._robot.checkConnect())
-        if hasattr(self._robot, "checkConnection"):
-            return bool(self._robot.checkConnection())
-        return False
+        
+        return bool(self._robot.checkConnect())
 
     def stand_up(self) -> None:
         self._robot.standUp()
 
     def lie_down(self) -> None:
         self._robot.lieDown()
+
+    def passive(self) -> None:
+        self._robot.passive()
 
     def send_motion(self, cmd: MotionCommand) -> None:
         self._robot.move(cmd.vx, cmd.vy, cmd.yaw_rate)
@@ -56,16 +54,12 @@ class ZSLHighLevelRobot(RobotAdapter):
     def read_state(self) -> RobotState:
         return RobotState(
             connected=self.check_connection(),
-            battery_power=self._safe_call("getBatteryPower"),
-            rpy=self._safe_vector3("getRPY"),
-            body_velocity=self._safe_vector3("getBodyVelocity"),
+            battery_power=self._robot.getBatteryPower(),
+            rpy=self._robot.getRPY(),
+            body_velocity=self._robot.getBodyVelocity(),
         )
 
     def close(self) -> None:
-        try:
-            self.lie_down()
-        except Exception:
-            pass
         self._connected = False
 
     def _load_sdk_module(self):
@@ -79,22 +73,3 @@ class ZSLHighLevelRobot(RobotAdapter):
 
         module_name = "mc_sdk_zsl_1_py" if self.robot_model == "zsl-1" else "mc_sdk_zsl_1w_py"
         return importlib.import_module(module_name)
-
-    def _safe_call(self, method_name: str):
-        if not hasattr(self._robot, method_name):
-            return None
-        try:
-            return getattr(self._robot, method_name)()
-        except Exception:
-            return None
-
-    def _safe_vector3(self, method_name: str):
-        value = self._safe_call(method_name)
-        if value is None:
-            return None
-        try:
-            if len(value) < 3:
-                return None
-            return (float(value[0]), float(value[1]), float(value[2]))
-        except Exception:
-            return None
