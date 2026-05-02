@@ -81,6 +81,7 @@ class RuntimeStepResult:
     instruction: str = ""
     img: Any | None = None
     model_text: str = ""
+    executed_commands: list[MotionCommand] = field(default_factory=list)
     error: str | None = None
 
 

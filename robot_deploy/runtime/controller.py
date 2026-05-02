@@ -53,6 +53,7 @@ class RuntimeController:
 
     def startup(self, endpoint: RobotEndpoint) -> None:
         self.robot.connect(endpoint)
+        time.sleep(3.0)  # wait for connection to stabilize
         if not self.robot.check_connection():
             raise RuntimeError("Robot connection check failed after initRobot")
         if self.policy.auto_stand_up:

@@ -156,6 +156,7 @@ def main() -> None:
     controller.startup(endpoint)
     try:
         result = controller.run_episode(request_provider=request_provider, episode_config=episode_cfg)
+        print("=== Episode Result ===")
         print("ok:", result.ok)
         print("stop_reason:", result.stop_reason)
         print("turns:", result.turns)
