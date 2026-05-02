@@ -256,23 +256,77 @@ class RuntimeController:
     def _save_inference_image(self, save_dir: str, record_id: str, image: Any | None) -> str | None:
         if image is None:
             return None
-
         image_path = os.path.join(save_dir, f"{record_id}.png")
         try:
+            # 1) PIL-like object
             if hasattr(image, "save"):
-                image.save(image_path)
+                try:
+                    image.save(image_path)
+                    return image_path
+                except Exception:
+                    pass
+
+            # 2) raw bytes (e.g. JPEG/PNG buffer)
+            if isinstance(image, (bytes, bytearray)):
+                try:
+                    from PIL import Image
+                    import io
+
+                    Image.open(io.BytesIO(image)).convert("RGB").save(image_path)
+                    return image_path
+                except Exception:
+                    pass
+
+            # 3) numpy array-like
+            try:
+                import numpy as np
+
+                arr = None
+                if isinstance(image, np.ndarray):
+                    arr = image
+                elif hasattr(image, "ndim") and hasattr(image, "shape"):
+                    try:
+                        arr = np.array(image)
+                    except Exception:
+                        arr = None
+
+                if arr is not None:
+                    # normalize floats -> uint8
+                    if arr.dtype.kind == "f":
+                        arr = np.clip(arr * 255.0, 0, 255).astype(np.uint8)
+                    elif arr.dtype != np.uint8:
+                        arr = arr.astype(np.uint8)
+
+                    if arr.ndim == 2:
+                        arr = np.stack([arr] * 3, axis=-1)
+                    if arr.ndim == 3 and arr.shape[2] == 4:
+                        arr = arr[:, :, :3]
+
+                    from PIL import Image
+
+                    Image.fromarray(arr).save(image_path)
+                    return image_path
+            except Exception:
+                pass
+
+            # 4) try buffer/memoryview fallback (for some GStreamer buffer-like objects)
+            try:
+                from PIL import Image
+                import io
+
+                mv = memoryview(image)
+                Image.open(io.BytesIO(mv.tobytes())).convert("RGB").save(image_path)
                 return image_path
-
-            from PIL import Image
-
-            rgb = image
-            if hasattr(image, "ndim") and hasattr(image, "shape") and getattr(image, "ndim", 0) == 3:
-                if image.shape[2] >= 3:
-                    rgb = image[:, :, :3]
-            Image.fromarray(rgb).save(image_path)
-            return image_path
+            except Exception:
+                pass
         except Exception:
-            return None
+            pass
+
+        try:
+            print(f"[RuntimeController] Could not save inference image: type={type(image)} record_id={record_id}")
+        except Exception:
+            pass
+        return None
 
     def _actions_to_safe_commands(self, actions: list[NavigationAction]) -> list[MotionCommand]:
         raw_commands = self.action_interface.to_motion_commands(actions)
