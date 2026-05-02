@@ -111,6 +111,13 @@ class RuntimeController:
                     request_data = request_provider()
                     model_rsp = self.model.infer(request_data)
 
+                    # 打印本次模型输入与输出，便于在终端追踪运行状态
+                    try:
+                        print(f"[RuntimeController] Turn {turns+1}: instruction='{request_data.instruction}'")
+                        print(f"[RuntimeController] Turn {turns+1}: model output: {model_rsp.text}")
+                    except Exception:
+                        pass
+
                     active_step_result = RuntimeStepResult(
                         ok=True,
                         instruction=request_data.instruction,
@@ -127,10 +134,20 @@ class RuntimeController:
                     if not actions:
                         actions = [NavigationAction(kind=ActionKind.STOP, raw_text=model_rsp.text)]
 
+                    # 打印解析到的动作列表
+                    try:
+                        print(f"[RuntimeController] Turn {turns+1}: parsed actions: {actions}")
+                    except Exception:
+                        pass
+
                     pending_actions.extend(actions)
                     turns += 1
 
                 action = pending_actions.pop(0)
+                try:
+                    print(f"[RuntimeController] Performing action: {action.kind} raw_text={getattr(action, 'raw_text', None)}")
+                except Exception:
+                    pass
                 if action.kind in {ActionKind.TURN_LEFT, ActionKind.TURN_RIGHT}:
                     continuous_rotation_count += 1
                 elif action.kind == ActionKind.MOVE_FORWARD:
@@ -142,6 +159,10 @@ class RuntimeController:
 
                 safe_commands = self._actions_to_safe_commands([action])
                 for cmd in safe_commands:
+                    try:
+                        print(f"[RuntimeController] Executing motion command: {cmd} (from action {action.kind})")
+                    except Exception:
+                        pass
                     self._execute_motion_with_gap(cmd)
                     executed_commands.append(cmd)
                     if active_step_result is not None:
