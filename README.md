@@ -34,17 +34,92 @@ sudo apt install -y ffmpeg \
 若希望在 Python 中使用 `cv2.CAP_GSTREAMER`，通常不要直接使用 `pip install opencv-python`。
 多数 pip 预编译 wheel 不带 GStreamer 支持，会在 `cv2.getBuildInformation()` 中显示 `GStreamer: NO`。
 
-建议在机器人控制环境中使用 conda-forge OpenCV：
+```
+# ========== 1. 安装系统级依赖（GStreamer、FFmpeg、GTK等） ==========
+sudo apt-get update
+sudo apt-get install -y \
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-ugly \
+    gstreamer1.0-libav \
+    gstreamer1.0-tools \
+    libavcodec-dev \
+    libavformat-dev \
+    libswscale-dev \
+    libv4l-dev \
+    libgtk-3-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libtiff-dev \
+    libxvidcore-dev \
+    libx264-dev \
+    libtbb-dev \
+    cmake \
+    ninja-build \
+    pkg-config \
+    git
 
-```powershell
-conda install -n robot-control -c conda-forge -y \
-	opencv gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
+# ========== 2. 创建并激活 Conda 环境 ==========
+conda create -n opencv_gst python=3.9 -y
+conda activate opencv_gst
+
+# ========== 3. 在 Conda 环境中安装 NumPy ==========
+pip install numpy
+
+# ========== 4. 克隆 OpenCV 源码（不需要 contrib） ==========
+mkdir -p ~/opencv_gst_build && cd ~/opencv_gst_build
+git clone https://github.com/opencv/opencv.git
+cd opencv
+git checkout 4.8.0   # 可换成其他版本号
+cd ..
+
+# ========== 5. 配置 CMake（禁用所有下载依赖，仅保留视频 I/O 必需模块） ==========
+cd opencv
+mkdir -p build && cd build
+
+cmake -D CMAKE_BUILD_TYPE=RELEASE \
+    -D CMAKE_INSTALL_PREFIX=$(python -c "import sys; print(sys.prefix)") \
+    -D PYTHON_DEFAULT_EXECUTABLE=$(which python) \
+    -D PYTHON3_EXECUTABLE=$(which python) \
+    -D PYTHON3_INCLUDE_DIR=$(python -c "from sysconfig import get_path; print(get_path('include'))") \
+    -D PYTHON3_PACKAGES_PATH=$(python -c "from sysconfig import get_path; print(get_path('platlib'))") \
+    -D BUILD_opencv_python3=ON \
+    -D BUILD_opencv_python2=OFF \
+    -D WITH_GSTREAMER=ON \
+    -D WITH_FFMPEG=ON \
+    -D WITH_GTK=ON \
+    -D WITH_IPP=OFF \
+    -D WITH_ADE=OFF \
+    -D WITH_OPENEXR=OFF \
+    -D WITH_PROTOBUF=OFF \
+    -D BUILD_IPP_IW=OFF \
+    -D BUILD_ITT=OFF \
+    -D BUILD_JAVA=OFF \
+    -D BUILD_opencv_apps=OFF \
+    -D BUILD_EXAMPLES=OFF \
+    -D BUILD_TESTS=OFF \
+    -D BUILD_PERF_TESTS=OFF \
+    -D BUILD_DOCS=OFF \
+    -D OPENCV_ENABLE_NONFREE=OFF \
+    -D OPENCV_GENERATE_PKGCONFIG=ON \
+    -D ENABLE_PRECOMPILED_HEADERS=OFF \
+    ..
+
+# ========== 6. 编译并安装 ==========
+make -j$(nproc)
+make install
+
+# ========== 7. 验证安装 ==========
+python -c "import cv2; print(cv2.__version__); print(cv2.getBuildInformation())" | grep -A 2 "GStreamer"
 ```
 
 验证：
 
 ```powershell
-conda run -n robot-control python -c "import cv2; s=cv2.getBuildInformation(); print('\n'.join([l for l in s.splitlines() if 'Video I/O' in l or 'GStreamer' in l or 'FFMPEG' in l]))"
+python -c "import cv2; s=cv2.getBuildInformation(); print('\n'.join([l for l in s.splitlines() if 'Video I/O' in l or 'GStreamer' in l or 'FFMPEG' in l]))"
 ```
 
 目标是看到：`FFMPEG: YES` 且 `GStreamer: YES`。
