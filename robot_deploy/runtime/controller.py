@@ -112,8 +112,8 @@ class RuntimeController:
 
                     # 打印本次模型输入与输出，便于在终端追踪运行状态
                     try:
-                        print(f"[RuntimeController] Turn {turns+1}: instruction='{request_data.instruction}'")
-                        print(f"[RuntimeController] Turn {turns+1}: model output: {model_rsp.text}")
+                        print(f"[Controller][Turn {turns+1}] instruction: {request_data.instruction}")
+                        print(f"[Controller][Turn {turns+1}] model output: {model_rsp.text}")
                     except Exception:
                         pass
 
@@ -233,20 +233,20 @@ class RuntimeController:
     ) -> tuple[NavigationAction, list[MotionCommand], bool]:
         try:
             print(
-                f"[RuntimeController][HITL] Turn {turn_index} Step {step_index}: planned action: {proposed_action}"
+                f"[HITL][Turn {turn_index}][Step {step_index}] planned action: {proposed_action.raw_text}"
             )
         except Exception:
             pass
 
         while True:
             try:
-                choice = input("[RuntimeController][HITL] y执行 / n手动 [y]: ")
+                choice = input(f"[HITL][Turn {turn_index}][Step {step_index}] y / n [y]: ")
             except EOFError:
                 manual_action = NavigationAction(kind=ActionKind.STOP, raw_text="[manual] stop (EOF)")
                 manual_commands = self._actions_to_safe_commands([manual_action])
                 try:
                     print(
-                        f"[RuntimeController][HITL] Turn {turn_index} Step {step_index}: executed action: {manual_action}"
+                        f"[HITL][Turn {turn_index}][Step {step_index}] executed action: {manual_action.raw_text}"
                     )
                 except Exception:
                     pass
@@ -256,7 +256,7 @@ class RuntimeController:
             if choice in {"", "y", "yes"}:
                 try:
                     print(
-                        f"[RuntimeController][HITL] Turn {turn_index} Step {step_index}: executed action: {proposed_action}"
+                        f"[HITL][Turn {turn_index}][Step {step_index}] executed action: {proposed_action.raw_text}"
                     )
                 except Exception:
                     pass
@@ -266,15 +266,15 @@ class RuntimeController:
                 manual_commands = self._actions_to_safe_commands([manual_action])
                 try:
                     print(
-                        f"[RuntimeController][HITL] Turn {turn_index} Step {step_index}: executed action: {manual_action}"
+                        f"[HITL][Turn {turn_index}][Step {step_index}] executed action: {manual_action.raw_text}"
                     )
                 except Exception:
                     pass
                 return manual_action, manual_commands, True
-            print("[RuntimeController][HITL] 输入无效，请输入 y 或 n。")
+            print("[HITL] invalid input. Please enter y or n.")
 
     def _interactive_prompt_manual_action(self, *, turn_index: int, step_index: int) -> NavigationAction:
-        prompt = f"[RuntimeController][HITL] 1前进 2左 3右 4停: "
+        prompt = f"[HITL] 1 for forward, 2 for left, 3 for right, 4 for stop: "
         while True:
             try:
                 raw = input(prompt)
@@ -282,16 +282,16 @@ class RuntimeController:
                 return NavigationAction(kind=ActionKind.STOP, raw_text="[manual] stop (EOF)")
 
             raw = str(raw).strip().lower()
-            if raw in {"1", "f", "forward", "前进"}:
+            if raw in {"1", "f", "forward"}:
                 return NavigationAction(kind=ActionKind.MOVE_FORWARD, raw_text="[manual] move forward")
-            if raw in {"2", "l", "left", "左转"}:
+            if raw in {"2", "l", "left"}:
                 return NavigationAction(kind=ActionKind.TURN_LEFT, raw_text="[manual] turn left")
-            if raw in {"3", "r", "right", "右转"}:
+            if raw in {"3", "r", "right"}:
                 return NavigationAction(kind=ActionKind.TURN_RIGHT, raw_text="[manual] turn right")
-            if raw in {"4", "s", "stop", "停止"}:
+            if raw in {"4", "s", "stop"}:
                 return NavigationAction(kind=ActionKind.STOP, raw_text="[manual] stop")
 
-            print("[RuntimeController][HITL] 输入无效，请输入 1/2/3/4。")
+            print("[HITL] invalid input. Please enter 1/2/3/4.")
 
     def _save_inference(self, turn_index: int, step_result: RuntimeStepResult) -> None:
         if not self.policy.save_inference_info:
