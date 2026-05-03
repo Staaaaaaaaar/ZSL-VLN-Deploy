@@ -29,7 +29,6 @@ class RuntimePolicy:
     auto_lie_down_on_shutdown: bool = True
     emergency_stop_on_error: bool = True
     stand_up_settle_sec: float = 3.0
-    inter_command_gap_sec: float = 0.1
     save_inference_info: bool = False
     inference_save_dir: str = "runtime_logs/inference"
 
@@ -134,44 +133,43 @@ class RuntimeController:
                     if not actions:
                         actions = [NavigationAction(kind=ActionKind.STOP, raw_text=model_rsp.text)]
 
-                    # 打印解析到的动作列表
-                    try:
-                        print(f"[RuntimeController] Turn {turns+1}: parsed actions: {actions}")
-                    except Exception:
-                        pass
+                    if active_step_result is not None:
+                        active_step_result.planned_actions = list(actions)
 
                     pending_actions.extend(actions)
                     turns += 1
 
                 action = pending_actions.pop(0)
-                try:
-                    print(f"[RuntimeController] Performing action: {action.kind} raw_text={getattr(action, 'raw_text', None)}")
-                except Exception:
-                    pass
-                if action.kind in {ActionKind.TURN_LEFT, ActionKind.TURN_RIGHT}:
+                proposed_commands = self._actions_to_safe_commands([action])
+                final_action, final_commands, was_intervened = self._interactive_review_action(
+                    turn_index=turns,
+                    step_index=steps + 1,
+                    proposed_action=action,
+                    proposed_commands=proposed_commands,
+                )
+
+                if final_action.kind in {ActionKind.TURN_LEFT, ActionKind.TURN_RIGHT}:
                     continuous_rotation_count += 1
-                elif action.kind == ActionKind.MOVE_FORWARD:
+                elif final_action.kind == ActionKind.MOVE_FORWARD:
                     continuous_rotation_count = 0
 
                 if continuous_rotation_count > cfg.early_stop_rotation:
                     stop_reason = "early_stop_rotation"
                     break
 
-                safe_commands = self._actions_to_safe_commands([action])
-                for cmd in safe_commands:
-                    try:
-                        print(f"[RuntimeController] Executing motion command: {cmd} (from action {action.kind})")
-                    except Exception:
-                        pass
-                    self._execute_motion_with_gap(cmd)
+                for cmd in final_commands:
+                    self.robot.send_motion(cmd)
                     executed_commands.append(cmd)
-                    if active_step_result is not None:
-                        active_step_result.executed_commands.append(cmd)
+
+                if active_step_result is not None:
+                    active_step_result.executed_actions.append(final_action)
+                    if was_intervened:
+                        active_step_result.intervened = True
 
                 steps += 1
 
-                if action.kind == ActionKind.STOP:
-                    stop_reason = "stopped_by_model"
+                if final_action.kind == ActionKind.STOP:
+                    stop_reason = "stopped_by_user" if was_intervened else "stopped_by_model"
                     break
 
             try:
@@ -222,10 +220,75 @@ class RuntimeController:
             finally:
                 self.robot.close()
 
-    def _execute_motion_with_gap(self, cmd: MotionCommand) -> None:
-        self.robot.send_motion(cmd)
-        if self.policy.inter_command_gap_sec > 0:
-            time.sleep(self.policy.inter_command_gap_sec)
+    def _interactive_review_action(
+        self,
+        *,
+        turn_index: int,
+        step_index: int,
+        proposed_action: NavigationAction,
+        proposed_commands: list[MotionCommand],
+    ) -> tuple[NavigationAction, list[MotionCommand], bool]:
+        try:
+            print(
+                f"[RuntimeController][HITL] Turn {turn_index} Step {step_index}: planned action: {proposed_action}"
+            )
+        except Exception:
+            pass
+
+        while True:
+            try:
+                choice = input("[RuntimeController][HITL] y执行 / n手动 [y]: ")
+            except EOFError:
+                manual_action = NavigationAction(kind=ActionKind.STOP, raw_text="[manual] stop (EOF)")
+                manual_commands = self._actions_to_safe_commands([manual_action])
+                try:
+                    print(
+                        f"[RuntimeController][HITL] Turn {turn_index} Step {step_index}: executed action: {manual_action}"
+                    )
+                except Exception:
+                    pass
+                return manual_action, manual_commands, True
+
+            choice = str(choice).strip().lower()
+            if choice in {"", "y", "yes"}:
+                try:
+                    print(
+                        f"[RuntimeController][HITL] Turn {turn_index} Step {step_index}: executed action: {proposed_action}"
+                    )
+                except Exception:
+                    pass
+                return proposed_action, proposed_commands, False
+            if choice in {"n", "no"}:
+                manual_action = self._interactive_prompt_manual_action(turn_index=turn_index, step_index=step_index)
+                manual_commands = self._actions_to_safe_commands([manual_action])
+                try:
+                    print(
+                        f"[RuntimeController][HITL] Turn {turn_index} Step {step_index}: executed action: {manual_action}"
+                    )
+                except Exception:
+                    pass
+                return manual_action, manual_commands, True
+            print("[RuntimeController][HITL] 输入无效，请输入 y 或 n。")
+
+    def _interactive_prompt_manual_action(self, *, turn_index: int, step_index: int) -> NavigationAction:
+        prompt = f"[RuntimeController][HITL] 1前进 2左 3右 4停: "
+        while True:
+            try:
+                raw = input(prompt)
+            except EOFError:
+                return NavigationAction(kind=ActionKind.STOP, raw_text="[manual] stop (EOF)")
+
+            raw = str(raw).strip().lower()
+            if raw in {"1", "f", "forward", "前进"}:
+                return NavigationAction(kind=ActionKind.MOVE_FORWARD, raw_text="[manual] move forward")
+            if raw in {"2", "l", "left", "左转"}:
+                return NavigationAction(kind=ActionKind.TURN_LEFT, raw_text="[manual] turn left")
+            if raw in {"3", "r", "right", "右转"}:
+                return NavigationAction(kind=ActionKind.TURN_RIGHT, raw_text="[manual] turn right")
+            if raw in {"4", "s", "stop", "停止"}:
+                return NavigationAction(kind=ActionKind.STOP, raw_text="[manual] stop")
+
+            print("[RuntimeController][HITL] 输入无效，请输入 1/2/3/4。")
 
     def _save_inference(self, turn_index: int, step_result: RuntimeStepResult) -> None:
         if not self.policy.save_inference_info:
