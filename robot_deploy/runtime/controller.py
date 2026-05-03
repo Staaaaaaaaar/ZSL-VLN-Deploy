@@ -319,9 +319,50 @@ class RuntimeController:
     def _save_inference_image(self, save_dir: str, record_id: str, image: Any | None) -> str | None:
         if image is None:
             return None
+
         image_path = os.path.join(save_dir, f"{record_id}.png")
+
+        def _save_with_cv2(frame: Any) -> bool:
+            try:
+                import cv2
+                import numpy as np
+
+                if isinstance(frame, (bytes, bytearray, memoryview)):
+                    data = bytes(frame)
+                    decoded = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+                    return decoded is not None and cv2.imwrite(image_path, decoded)
+
+                array = np.asarray(frame)
+                if array.size == 0:
+                    return False
+
+                if array.dtype.kind == "b":
+                    array = array.astype(np.uint8) * 255
+                elif array.dtype.kind == "f":
+                    max_value = float(np.max(array)) if array.size else 0.0
+                    if max_value <= 1.0:
+                        array = np.clip(array * 255.0, 0, 255)
+                    else:
+                        array = np.clip(array, 0, 255)
+                    array = array.astype(np.uint8)
+                elif array.dtype != np.uint8:
+                    array = array.astype(np.uint8)
+
+                if array.ndim == 2:
+                    save_array = array
+                elif array.ndim == 3:
+                    if array.shape[2] == 1:
+                        save_array = array[:, :, 0]
+                    else:
+                        save_array = array[:, :, :3]
+                else:
+                    return False
+
+                return cv2.imwrite(image_path, np.ascontiguousarray(save_array))
+            except Exception:
+                return False
+
         try:
-            # 1) PIL-like object
             if hasattr(image, "save"):
                 try:
                     image.save(image_path)
@@ -329,59 +370,16 @@ class RuntimeController:
                 except Exception:
                     pass
 
-            # 2) raw bytes (e.g. JPEG/PNG buffer)
-            if isinstance(image, (bytes, bytearray)):
-                try:
-                    from PIL import Image
-                    import io
-
-                    Image.open(io.BytesIO(image)).convert("RGB").save(image_path)
-                    return image_path
-                except Exception:
-                    pass
-
-            # 3) numpy array-like
-            try:
-                import numpy as np
-
-                arr = None
-                if isinstance(image, np.ndarray):
-                    arr = image
-                elif hasattr(image, "ndim") and hasattr(image, "shape"):
-                    try:
-                        arr = np.array(image)
-                    except Exception:
-                        arr = None
-
-                if arr is not None:
-                    # normalize floats -> uint8
-                    if arr.dtype.kind == "f":
-                        arr = np.clip(arr * 255.0, 0, 255).astype(np.uint8)
-                    elif arr.dtype != np.uint8:
-                        arr = arr.astype(np.uint8)
-
-                    if arr.ndim == 2:
-                        arr = np.stack([arr] * 3, axis=-1)
-                    if arr.ndim == 3 and arr.shape[2] == 4:
-                        arr = arr[:, :, :3]
-
-                    from PIL import Image
-
-                    Image.fromarray(arr).save(image_path)
-                    return image_path
-            except Exception:
-                pass
-
-            # 4) try buffer/memoryview fallback (for some GStreamer buffer-like objects)
-            try:
-                from PIL import Image
-                import io
-
-                mv = memoryview(image)
-                Image.open(io.BytesIO(mv.tobytes())).convert("RGB").save(image_path)
+            if _save_with_cv2(image):
                 return image_path
+
+            try:
+                mv = memoryview(image)
             except Exception:
-                pass
+                mv = None
+
+            if mv is not None and _save_with_cv2(mv):
+                return image_path
         except Exception:
             pass
 
