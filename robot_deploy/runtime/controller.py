@@ -103,9 +103,16 @@ class RuntimeController:
                     break
 
                 if not pending_actions:
+                    # Save previous turn result before starting a new turn
+                    if active_step_result is not None:
+                        self._save_inference(turn_index=turns, step_result=active_step_result)
+                        step_results.append(active_step_result)
+
                     if turns >= cfg.max_turn_budget:
                         stop_reason = "episode_turns_exceeded"
                         break
+                    
+                    time.sleep(0.5) # small delay to get clear img for next turn
 
                     request_data = request_provider()
                     model_rsp = self.model.infer(request_data)
@@ -117,14 +124,14 @@ class RuntimeController:
                     except Exception:
                         pass
 
+                    # Create new step result for this turn
                     active_step_result = RuntimeStepResult(
                         ok=True,
                         instruction=request_data.instruction,
                         img=request_data.image,
                         model_text=model_rsp.text,
+                        metadata=dict(request_data.metadata),
                     )
-                    step_results.append(active_step_result)
-                    self._save_inference(turn_index=turns + 1, step_result=active_step_result)
 
                     model_outputs.append(model_rsp.text)
 
@@ -133,9 +140,7 @@ class RuntimeController:
                     if not actions:
                         actions = [NavigationAction(kind=ActionKind.STOP, raw_text=model_rsp.text)]
 
-                    if active_step_result is not None:
-                        active_step_result.planned_actions = list(actions)
-
+                    active_step_result.planned_actions = list(actions)
                     pending_actions.extend(actions)
                     turns += 1
 
@@ -172,6 +177,11 @@ class RuntimeController:
                     stop_reason = "stopped_by_user" if was_intervened else "stopped_by_model"
                     break
 
+            # Save the last turn result before exiting loop
+            if active_step_result is not None:
+                self._save_inference(turn_index=turns, step_result=active_step_result)
+                step_results.append(active_step_result)
+
             try:
                 self.robot.stop()
             except Exception:
@@ -190,6 +200,9 @@ class RuntimeController:
             if active_step_result is not None and active_step_result.error is None:
                 active_step_result.ok = False
                 active_step_result.error = str(exc)
+                # Save the failed step result
+                self._save_inference(turn_index=turns, step_result=active_step_result)
+                step_results.append(active_step_result)
             if self.policy.emergency_stop_on_error:
                 try:
                     self.robot.stop()
@@ -304,41 +317,67 @@ class RuntimeController:
         os.makedirs(save_dir, exist_ok=True)
         ts_ms = int(time.time() * 1000)
         record_id = f"turn_{turn_index:04d}_{ts_ms}"
-        image_path = self._save_inference_image(save_dir=save_dir, record_id=record_id, image=step_result.img)
+        image_path = self._save_inference_image(
+            save_dir=save_dir,
+            record_id=record_id,
+            image=step_result.img,
+            image_metadata=step_result.metadata,
+        )
 
         payload = {
+            "ok": step_result.ok,
             "turn": turn_index,
-            "timestamp_ms": ts_ms,
+            "image_path": image_path,
             "instruction": step_result.instruction,
             "model_text": step_result.model_text,
-            "ok": step_result.ok,
+            "planned_actions": [a.raw_text for a in step_result.planned_actions],
+            "intervened": step_result.intervened,
+            "executed_actions": [a.raw_text for a in step_result.executed_actions],
             "error": step_result.error,
-            "image_path": image_path,
         }
         json_path = os.path.join(save_dir, f"{record_id}.json")
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
 
-    def _save_inference_image(self, save_dir: str, record_id: str, image: Any | None) -> str | None:
+    def _save_inference_image(
+        self,
+        save_dir: str,
+        record_id: str,
+        image: Any | None,
+        image_metadata: dict[str, Any] | None = None,
+    ) -> str | None:
         if image is None:
             return None
 
         image_path = os.path.join(save_dir, f"{record_id}.png")
+        image_color_space = str((image_metadata or {}).get("image_color_space", "")).strip().lower()
 
-        def _save_with_cv2(frame: Any) -> bool:
+        try:
+            import cv2
+            import numpy as np
+
+            # Handle PIL Image
+            if hasattr(image, "mode"):
+                # PIL Image detected
+                try:
+                    array = np.asarray(image)
+                    # If the image is RGB, cv2.imwrite still needs BGR order.
+                    if (image.mode == "RGB" or image_color_space == "rgb") and array.ndim == 3 and array.shape[2] == 3:
+                        # Convert RGB to BGR for cv2.imwrite
+                        array = array[:, :, ::-1]
+                    return cv2.imwrite(image_path, np.ascontiguousarray(array))
+                except Exception as e:
+                    print(f"[DEBUG] PIL Image conversion failed: {e}")
+                    pass
+
+            # Handle numpy array or raw frame
             try:
-                import cv2
-                import numpy as np
+                array = np.asarray(image)
+            except Exception:
+                array = None
 
-                if isinstance(frame, (bytes, bytearray, memoryview)):
-                    data = bytes(frame)
-                    decoded = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
-                    return decoded is not None and cv2.imwrite(image_path, decoded)
-
-                array = np.asarray(frame)
-                if array.size == 0:
-                    return False
-
+            if array is not None and array.size > 0:
+                # Convert to uint8 if needed
                 if array.dtype.kind == "b":
                     array = array.astype(np.uint8) * 255
                 elif array.dtype.kind == "f":
@@ -351,39 +390,42 @@ class RuntimeController:
                 elif array.dtype != np.uint8:
                     array = array.astype(np.uint8)
 
+                # Handle image dimensions
                 if array.ndim == 2:
+                    # Grayscale
                     save_array = array
                 elif array.ndim == 3:
                     if array.shape[2] == 1:
                         save_array = array[:, :, 0]
                     else:
+                        # Multi-channel image - use first 3 channels
                         save_array = array[:, :, :3]
+                        if image_color_space == "rgb" and save_array.shape[2] == 3:
+                            save_array = save_array[:, :, ::-1]
                 else:
-                    return False
+                    print(f"[DEBUG] Unsupported array shape: {array.shape}")
+                    return None
 
-                return cv2.imwrite(image_path, np.ascontiguousarray(save_array))
-            except Exception:
-                return False
-
-        try:
-            if hasattr(image, "save"):
-                try:
-                    image.save(image_path)
+                # cv2.imwrite expects BGR format
+                # For raw camera data from RTSP, it should already be BGR
+                result = cv2.imwrite(image_path, np.ascontiguousarray(save_array))
+                if result:
                     return image_path
-                except Exception:
-                    pass
+                else:
+                    print(f"[DEBUG] cv2.imwrite failed for {record_id}")
+                    return None
 
-            if _save_with_cv2(image):
-                return image_path
+            # Fallback for bytes/bytearray
+            if isinstance(image, (bytes, bytearray, memoryview)):
+                data = bytes(image)
+                decoded = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+                if decoded is not None:
+                    result = cv2.imwrite(image_path, decoded)
+                    if result:
+                        return image_path
 
-            try:
-                mv = memoryview(image)
-            except Exception:
-                mv = None
-
-            if mv is not None and _save_with_cv2(mv):
-                return image_path
-        except Exception:
+        except Exception as e:
+            print(f"[DEBUG] Save image failed with exception: {e}")
             pass
 
         try:

@@ -40,6 +40,7 @@ def choose_stream(cfg: dict, backend_override: str | None, rtsp_transport: str):
     width = int(camera_cfg.get("width", 1280))
     height = int(camera_cfg.get("height", 720))
     backend = (backend_override or camera_cfg.get("backend", "gstreamer")).strip().lower()
+    force_rgb_conversion = bool(camera_cfg.get("force_rgb_conversion", False))
 
     if backend == "gstreamer":
         stream = GStreamerCameraStream(
@@ -50,6 +51,7 @@ def choose_stream(cfg: dict, backend_override: str | None, rtsp_transport: str):
             latency=int(camera_cfg.get("gst_latency", 0)),
             drop=bool(camera_cfg.get("gst_drop", True)),
             max_buffers=int(camera_cfg.get("gst_max_buffers", 1)),
+            force_rgb_conversion=force_rgb_conversion,
         )
     elif backend == "ffmpeg":
         stream = FFmpegCameraStream(
@@ -58,6 +60,7 @@ def choose_stream(cfg: dict, backend_override: str | None, rtsp_transport: str):
             height=height,
             rtsp_transport=rtsp_transport,
             low_latency=bool(camera_cfg.get("ffmpeg_low_latency", True)),
+            force_rgb_conversion=force_rgb_conversion,
         )
     else:
         raise ValueError(f"unsupported backend: {backend}")

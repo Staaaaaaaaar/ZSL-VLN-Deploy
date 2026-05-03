@@ -24,6 +24,7 @@ class FFmpegCameraStream:
         reconnect_interval_sec: float = 0.8,
         rtsp_transport: str = "tcp",
         low_latency: bool = True,
+        force_rgb_conversion: bool = False,
     ):
         self.rtsp_url = rtsp_url
         self.width = width
@@ -31,6 +32,7 @@ class FFmpegCameraStream:
         self.reconnect_interval_sec = reconnect_interval_sec
         self.rtsp_transport = rtsp_transport
         self.low_latency = low_latency
+        self.force_rgb_conversion = force_rgb_conversion
 
         self._cv2 = None
         self._capture = None
@@ -103,6 +105,13 @@ class FFmpegCameraStream:
                     frame = self._cv2.resize(frame, (self.width, self.height))
             except Exception:
                 pass
+
+            # Apply color conversion if needed (RGB -> BGR)
+            if self.force_rgb_conversion:
+                try:
+                    frame = self._cv2.cvtColor(frame, self._cv2.COLOR_RGB2BGR)
+                except Exception:
+                    pass
 
             self._frames_ok += 1
             with self._lock:
@@ -178,6 +187,7 @@ class GStreamerCameraStream:
         latency: int = 0,
         drop: bool = True,
         max_buffers: int = 1,
+        force_rgb_conversion: bool = False,
     ):
         self.rtsp_url = rtsp_url
         self.width = width
@@ -187,6 +197,7 @@ class GStreamerCameraStream:
         self.latency = max(0, int(latency))
         self.drop = bool(drop)
         self.max_buffers = max(1, int(max_buffers))
+        self.force_rgb_conversion = force_rgb_conversion
 
         self._cv2 = None
         self._capture = None
@@ -250,6 +261,21 @@ class GStreamerCameraStream:
                 self._release_capture()
                 time.sleep(self.reconnect_interval_sec)
                 continue
+
+            # Resize if needed
+            try:
+                h, w = frame.shape[:2]
+                if self.width > 0 and self.height > 0 and (w != self.width or h != self.height):
+                    frame = self._cv2.resize(frame, (self.width, self.height))
+            except Exception:
+                pass
+
+            # Apply color conversion if needed (RGB -> BGR)
+            if self.force_rgb_conversion:
+                try:
+                    frame = self._cv2.cvtColor(frame, self._cv2.COLOR_RGB2BGR)
+                except Exception:
+                    pass
 
             self._frames_ok += 1
             with self._lock:

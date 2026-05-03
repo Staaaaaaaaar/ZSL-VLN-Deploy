@@ -32,6 +32,7 @@ def _build_camera_stream(camera_cfg: dict[str, Any]):
     width = int(camera_cfg.get("width", 1280))
     height = int(camera_cfg.get("height", 720))
     transport = str(camera_cfg.get("rtsp_transport", "tcp")).strip().lower()
+    force_rgb_conversion = bool(camera_cfg.get("force_rgb_conversion", False))
 
     if backend == "gstreamer":
         return GStreamerCameraStream(
@@ -42,6 +43,7 @@ def _build_camera_stream(camera_cfg: dict[str, Any]):
             latency=int(camera_cfg.get("gst_latency", 0)),
             drop=bool(camera_cfg.get("gst_drop", True)),
             max_buffers=int(camera_cfg.get("gst_max_buffers", 1)),
+            force_rgb_conversion=force_rgb_conversion,
         )
 
     return FFmpegCameraStream(
@@ -50,6 +52,7 @@ def _build_camera_stream(camera_cfg: dict[str, Any]):
         height=height,
         rtsp_transport=transport,
         low_latency=bool(camera_cfg.get("ffmpeg_low_latency", True)),
+        force_rgb_conversion=force_rgb_conversion,
     )
 
 
@@ -57,14 +60,14 @@ def _frame_to_image(frame: Any):
     try:
         rgb = frame[:, :, ::-1].copy()
     except Exception:
-        return frame
+        return frame, "unknown"
 
     try:
         from PIL import Image
 
-        return Image.fromarray(rgb)
+        return Image.fromarray(rgb), "rgb"
     except Exception:
-        return rgb
+        return rgb, "rgb"
 
 
 def main() -> None:
@@ -135,6 +138,8 @@ def main() -> None:
         if pkt is None:
             raise RuntimeError("camera frame timeout during episode")
 
+        image, image_color_space = _frame_to_image(pkt.frame)
+
         state = None
         try:
             state = robot.read_state()
@@ -145,11 +150,12 @@ def main() -> None:
             "frame_timestamp": pkt.timestamp,
             "camera_stats": camera_stream.stats(),
             "robot_state": state,
+            "image_color_space": image_color_space,
         }
 
         return NavigationRequest(
             instruction=instruction,
-            image=_frame_to_image(pkt.frame),
+            image=image,
             metadata=metadata,
         )
 

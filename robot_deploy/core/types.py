@@ -81,6 +81,7 @@ class RuntimeStepResult:
     instruction: str = ""
     img: Any | None = None
     model_text: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
     intervened: bool = False
     planned_actions: list[NavigationAction] = field(default_factory=list)
     executed_actions: list[NavigationAction] = field(default_factory=list)

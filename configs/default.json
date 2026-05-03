@@ -51,6 +51,7 @@
     "height": 720,
     "warmup_timeout_sec": 4.0,
     "ffmpeg_low_latency": true,
+    "force_rgb_conversion": false,
     "gst_latency": 0,
     "gst_drop": true,
     "gst_max_buffers": 1
