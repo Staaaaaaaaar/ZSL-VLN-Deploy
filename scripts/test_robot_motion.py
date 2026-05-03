@@ -93,8 +93,7 @@ def main() -> int:
     print("[STEP] stand up")
     robot.stand_up()
 
-    # NOTE: In external control-node mode, the node process is responsible for
-    # lieDown/passive on program exit. This client script only sends motion.
+    time.sleep(7.0)
 
     try:
         while True:
@@ -115,6 +114,12 @@ def main() -> int:
         robot.stop()
 
     robot.stop()
+    print("[STEP] lie down")
+    robot.lie_down()
+    time.sleep(3.0)
+    print("[STEP] passive")
+    robot.passive()
+    time.sleep(2)
     robot.close()
 
 
