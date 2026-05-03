@@ -214,6 +214,9 @@ class RuntimeController:
                 pass
             if self.policy.auto_lie_down_on_shutdown:
                 self.robot.lie_down()
+                time.sleep(2.0)
+                self.robot.passive()
+                time.sleep(1.0)
         finally:
             try:
                 self.model.close()

@@ -3,7 +3,7 @@
     "robot_model": "zsl-1",
     "sdk_root": "third_party/zsibot_sdk",
     "endpoint": {
-      "local_ip": "192.168.234.10",
+      "local_ip": "192.168.234.11",
       "local_port": 43988,
       "dog_ip": "192.168.234.1"
     }
@@ -38,14 +38,13 @@
       "auto_stand_up": true,
       "auto_lie_down_on_shutdown": true,
       "emergency_stop_on_error": true,
-      "stand_up_settle_sec": 3.0,
-      "inter_command_gap_sec": 0.1,
-      "save_inference_info": false,
+      "stand_up_settle_sec": 7.0,
+      "save_inference_info": true,
       "inference_save_dir": "runtime_logs/inference"
     }
   },
   "camera": {
-    "backend": "ffmpeg",
+    "backend": "gstreamer",
     "rtsp_url": "rtsp://192.168.234.1:8554/test",
     "rtsp_transport": "tcp",
     "width": 1280,
