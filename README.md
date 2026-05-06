@@ -63,7 +63,7 @@ sudo apt-get install -y \
     git
 
 # ========== 2. 创建并激活 Conda 环境 ==========
-conda create -n opencv_gst python=3.9 -y
+conda create -n opencv_gst python=3.10 -y
 conda activate opencv_gst
 
 # ========== 3. 在 Conda 环境中安装 NumPy ==========
@@ -73,7 +73,7 @@ pip install numpy
 mkdir -p ~/opencv_gst_build && cd ~/opencv_gst_build
 git clone https://github.com/opencv/opencv.git
 cd opencv
-git checkout 4.8.0   # 可换成其他版本号
+git checkout 4.10.0   # 可换成其他版本号
 cd ..
 
 # ========== 5. 配置 CMake（禁用所有下载依赖，仅保留视频 I/O 必需模块） ==========
